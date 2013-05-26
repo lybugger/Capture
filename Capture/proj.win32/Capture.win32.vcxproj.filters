@@ -1,0 +1,119 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="resource">
+      <UniqueIdentifier>{fa50a4cf-cb34-41c0-9348-6d83bb8db4b5}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;jpg;jpeg;jpe;png;manifest</Extensions>
+    </Filter>
+    <Filter Include="Class">
+      <UniqueIdentifier>{c92c4ae1-daaf-4b90-83ac-70ecb958fc8c}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Class\Actor">
+      <UniqueIdentifier>{ab170a34-b291-4ff3-84c3-0fed7abc6b80}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Class\Common">
+      <UniqueIdentifier>{be6350ba-cf6d-48a2-9f9a-48c8c410c37e}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Class\Scene">
+      <UniqueIdentifier>{79a4b86f-2397-44d1-9096-71963b01f55c}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="res\Capture.ico">
+      <Filter>resource</Filter>
+    </None>
+    <None Include="..\Resources\CloseSelected.png">
+      <Filter>resource</Filter>
+    </None>
+    <None Include="..\Resources\CloseNormal.png">
+      <Filter>resource</Filter>
+    </None>
+    <None Include="..\Resources\HelloWorld.png">
+      <Filter>resource</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="Capture.rc">
+      <Filter>resource</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="ActorManager.cpp">
+      <Filter>Class\Actor</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Classes\AppDelegate.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Classes\GameCanvas.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Classes\GameManager.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="GameResourceManager.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="..\Classes\GLES-Render.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="main.cpp">
+      <Filter>Class\Common</Filter>
+    </ClCompile>
+    <ClCompile Include="GameWorldScene.cpp">
+      <Filter>Class\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="LoadingScene.cpp">
+      <Filter>Class\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="LogoScene.cpp">
+      <Filter>Class\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="MenuScene.cpp">
+      <Filter>Class\Scene</Filter>
+    </ClCompile>
+    <ClCompile Include="Actor.cpp">
+      <Filter>Class\Actor</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ActorManager.h">
+      <Filter>Class\Actor</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Classes\AppDelegate.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Classes\GameCanvas.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Classes\GameManager.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="GameResourceManager.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="..\Classes\GLES-Render.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="main.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="MenuScene.h">
+      <Filter>Class\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="GameWorldScene.h">
+      <Filter>Class\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="LoadingScene.h">
+      <Filter>Class\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="LogoScene.h">
+      <Filter>Class\Scene</Filter>
+    </ClInclude>
+    <ClInclude Include="resource.h">
+      <Filter>Class\Common</Filter>
+    </ClInclude>
+    <ClInclude Include="Actor.h">
+      <Filter>Class\Actor</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>
