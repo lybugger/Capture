@@ -1,5 +1,5 @@
 #include "GameWorldScene.h"
-#include "BaseActor.h"
+#include "Actor.h"
 #include "ActorManager.h"
 
 GameWorldLayer::GameWorldLayer() {
@@ -23,7 +23,7 @@ bool GameWorldLayer::init(int level) {
 		CCSize size = pBG->getTextureRect().size;
 		m_ActorManager->createWrapWall(this, ccp(0,0), size);
 		m_ActorManager->createDebug();
-		m_ActorManager->createActor(BaseActor::AT_Control,(CCLayer *)this,ccp(winSize.width/2,winSize.height/2),50);
+		m_ActorManager->createActor(Actor::AT_Control,(CCLayer *)this,ccp(winSize.width/2,winSize.height/2),50);
 		setTouchEnabled( true );
 		this->schedule(schedule_selector(GameWorldLayer::update));
 
@@ -36,6 +36,12 @@ bool GameWorldLayer::init(int level) {
 void GameWorldLayer::update(float dt) {
 	m_ActorManager->updateWorld(dt);
 
+	//是否结束游戏
+	if(m_ActorManager->isOver()) {
+		//do somthing
+		return;
+	}
+	
 	//更新视野
 	CCSize winSize = CCDirector::sharedDirector()->getWinSize();
 	CCPoint actorPos = m_ActorManager->getControlActor()->getShape()->getPosition();

@@ -4,7 +4,8 @@
 Actor::Actor()
 	:m_body(NULL),
 	m_shape(NULL),
-	m_type(-1)
+	m_type(-1),
+	m_deltaMass(0)
  {
 	//自动产生id
 	static int id=0;
@@ -30,6 +31,7 @@ MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) 
 	b2BodyDef bodyDef;
 	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
 	bodyDef.type =  b2_dynamicBody;
+	bodyDef.userData = (Actor *)this;		//以便在碰撞检测找到
 
 	//创建box
 	b2CircleShape circleShape;
@@ -58,20 +60,22 @@ MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) 
 	
 }
 
-//被吃
-float MoveActor::reduce(float rMass) {
-	//减少的质量不得大于自身的质量
-	float mass = min(rMass,this->getMass());
-	setMass(this->getMass()-mass);
+
+float MoveActor::swallow() {
+	float mass = m_deltaMass;
+	m_deltaMass = 0;
+
+	if(mass>0) {											//吞噬
+		setMass(this->getMass()+mass);
+	}else if(mass<0) {									//被吞噬
+		//减少的质量不得大于自身的质量
+		mass = min(mass, this->getMass());
+		setMass(this->getMass()-mass);
+	}else {													//什么都不做
+
+	}
 
 	return mass;
-}
-
-//吞噬
-float MoveActor::increase(float iMass) {
-	//增加质量
-	setMass(this->getMass()+iMass);
-	return iMass;
 }
 
 
@@ -86,7 +90,7 @@ ControlActor::ControlActor(b2World *world, CCLayer *layer, CCPoint pos, float ra
 //角色抛射物质
 Actor *ControlActor::launch(CCPoint touchPos) {
 	//判断角色大小为单位大小
-	if(m_body->GetFixtureList()->GetShape()->m_radius*PTM_RATIO <= UNIT_RADIUS+20) {
+	if(this->getRadius() <= this->getPushRadius()) {
 		return NULL;
 	}
 
@@ -95,11 +99,11 @@ Actor *ControlActor::launch(CCPoint touchPos) {
 	dir.Normalize();	//将向量标准化
 
 	//创建喷射物质
-	float radius = m_body->GetFixtureList()->GetShape()->m_radius*PTM_RATIO+UNIT_RADIUS;
+	float radius = this->getRadius()+this->getPushRadius();
 	CCPoint launchPos = ccp(dir.x*radius+bodyPos.x,dir.y*radius+bodyPos.y);
 	CCLayer *layer = (CCLayer *)m_shape->getParent();
 
-	MoveActor *launchActor = (MoveActor *)ActorManager::shareActorManager()->createActor(Actor::AT_Move, layer, launchPos,UNIT_RADIUS);
+	MoveActor *launchActor = (MoveActor *)ActorManager::shareActorManager()->createActor(Actor::AT_Move, layer, launchPos, this->getPushRadius());
 	//计算喷射物质速度
 	b2Vec2 launchVelocity = b2Vec2(dir.x*UNIT_SPEED,dir.y*UNIT_SPEED);
 	float launchMass = launchActor->getMass();    //喷射物质质量
@@ -109,19 +113,49 @@ Actor *ControlActor::launch(CCPoint touchPos) {
 	this->setMass(newMass);		//设置质量
 
 	//为控制角色施加冲量
-	//this->getBody()->ApplyLinearImpulse(impluse,m_body->GetPosition());
+	this->getBody()->ApplyLinearImpulse(impluse,m_body->GetPosition());
 	//为喷射物设置速度
-	//launchActor->getBody()->SetLinearVelocity(launchVelocity);
+	launchActor->getBody()->SetLinearVelocity(launchVelocity);
 	return launchActor;
 }
 
 
 //--------------------------------------------------------------WallActor
+WallActor::~WallActor() {
+	for(list<SingalWallActor *>::iterator itr = m_wall.begin();itr!=m_wall.end();) {
+		delete *itr;
+		itr = m_wall.erase(itr);
+	}
+}
+
+//方形区域
 WallActor::WallActor(b2World *world, CCLayer *layer, CCPoint pos, CCSize size) {
+	int thick = 20;
+	m_wall.push_back(
+		new SingalWallActor(world, layer, CCPoint(pos.x + size.width/2, pos.y + size.height),CCSize(size.width,thick)));
+	m_wall.push_back(
+		new SingalWallActor(world, layer, CCPoint(pos.x + size.width/2, pos.y),CCSize(size.width,thick)));
+	m_wall.push_back(
+		new SingalWallActor(world, layer, CCPoint(pos.x, pos.y + size.height/2),CCSize(thick,size.height)));
+	m_wall.push_back(
+		new SingalWallActor(world, layer, CCPoint(pos.x + size.width, pos.y + size.height/2),CCSize(thick,size.height)));
+
+	//-----------------设置类型
+	m_type = Actor::AT_Wall;
+}
+
+//圆形区域
+WallActor::WallActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) {
+	//..................
+}
+
+
+SingalWallActor::SingalWallActor(b2World *world, CCLayer *layer, CCPoint pos, CCSize size) {
 	//-----------------设置物理模型
 	b2BodyDef bodyDef;
 	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
 	bodyDef.type =  b2_staticBody;
+	bodyDef.userData = (Actor *)this;				//以便在碰撞检测找到
 
 	//创建box
 	b2PolygonShape boxShape;
@@ -145,6 +179,10 @@ WallActor::WallActor(b2World *world, CCLayer *layer, CCPoint pos, CCSize size) {
 	layer->addChild(shape);
 	m_shape = shape;
 
-	//-----------------设置类型
-	m_type = Actor::AT_Wall;
+}
+
+//--------------------------------------------------------------SunActor 
+
+SunActor::SunActor(b2World *world, CCLayer *layer, CCPoint pos, float radius, float gravRadius) {
+
 }

@@ -1,4 +1,6 @@
 #include "ActorManager.h"
+#include "GLES-Render.h"
+
 
 ActorManager *ActorManager::m_ActorManager = new ActorManager();
 ActorManager *ActorManager::shareActorManager() {
@@ -17,47 +19,51 @@ ActorManager::ActorManager()
 {
 	m_world->SetGravity(b2Vec2(0,0));
 	m_world->SetContactListener(this);
+	m_over = false;
 }
 
 //析构函数
 ActorManager::~ActorManager() {
 	release();
-
-	//clear move
-	for(list<Actor *>::iterator itr = m_actors.begin();itr!=m_actors.end();) {
-		itr = m_actors.erase(itr);
+	//clear control actor
+	if(m_cActor) {
+		delete m_cActor;
+		m_cActor = NULL;
 	}
-	//clear wall
-	for(list<Actor *>::iterator itr = m_wall.begin();itr!=m_wall.end();) {
-		itr = m_wall.erase(itr);
+
+	//clear move actor
+	for(list<Actor *>::iterator itr = m_actors.begin();itr!=m_actors.end();) {
+		delete *itr;
+		itr = m_actors.erase(itr);
 	}
 
 }
 
-void ActorManager::BeginContact(b2Contact* contact) 
-{ 
+
+//碰撞开始
+void ActorManager::BeginContact(b2Contact* contact) { 
 	if(contact) {
 		b2Body *b1 = contact->GetFixtureA()->GetBody();
 		b2Body *b2 = contact->GetFixtureB()->GetBody();
-		if(((Actor *)b1->GetUserData())->getType() != Actor::AT_Wall 
-			&& ((Actor *)b2->GetUserData())->getType() != Actor::AT_Wall) 
-		{
+		Actor *a1 = (Actor *)b1->GetUserData();
+		Actor *a2 = (Actor *)b2->GetUserData();
 
-			Actor *ba1 = (Actor *)b1->GetUserData();
-			Actor *ba2 = (Actor *)b2->GetUserData();
-			MoveActor *a1 = static_cast<MoveActor *>(ba1);
-			MoveActor *a2 = static_cast<MoveActor *>(ba2);
+		if(a1->getType() != Actor::AT_Wall && a2->getType() != Actor::AT_Wall) {
 
-			if(a1->getMass() > a2->getMass()) {
-				a1->increase(a2->getMass());
-				a2->reduce(a2->getMass());
-				m_actors.remove(a2);
-					delete a2;
+			MoveActor *ma1 = static_cast<MoveActor *>(a1);
+			MoveActor *ma2 = static_cast<MoveActor *>(a2);
+
+			//预防多个同时碰撞
+			if(ma1->getDeltaMass() != 0 || ma2->getDeltaMass() !=0) return;
+
+			if(ma1->getMass() > ma2->getMass()) {
+				ma1->setDeltaMass(ma2->getMass());
+				ma2->setDeltaMass(-ma2->getMass());
+				this->clearActor(ma2);
 			}else {
-				a2->increase(a1->getMass());
-				a1->reduce(a1->getMass());
-				m_actors.remove(a1);
-				delete a1;
+				ma2->setDeltaMass(ma1->getMass());
+				ma1->setDeltaMass(-ma1->getMass());
+				this->clearActor(ma1);
 			}
 			
 		}
@@ -67,20 +73,38 @@ void ActorManager::BeginContact(b2Contact* contact)
 }
 
 void ActorManager::updateWorld(float dt) {
+	//------------------删除吞噬的对象
+	for(list<Actor *>::iterator itr = m_destroy.begin();itr!=m_destroy.end();) {
+		delete *itr;
+		itr = m_destroy.erase(itr);
+	}
+
+
+
+	//------------------更新物理世界
 	m_world->Step(dt, 8, 1);
 
-	for(b2Body *body = m_world->GetBodyList();body;body=body->GetNext()) {
-		if(body->GetUserData() != NULL) {
-			CCSprite* actor = ((Actor *)body->GetUserData())->getShape();
+	
+	for(b2Body *actor_body = m_world->GetBodyList();actor_body;actor_body=actor_body->GetNext()) {
+		Actor *actor = (Actor *)actor_body->GetUserData();
+		if(actor==NULL) break;
+
+		//------------------更新 actor shape
+		if(actor_body->GetUserData() != NULL) {
+			CCSprite *actor_shape = actor->getShape();
 			//更新位置
-			actor->setPosition(ccp(body->GetPosition().x*PTM_RATIO,body->GetPosition().y*PTM_RATIO));
+			actor_shape->setPosition(ccp(actor_body->GetPosition().x*PTM_RATIO,actor_body->GetPosition().y*PTM_RATIO));
 			//更新角度
-			actor->setRotation(-1*CC_RADIANS_TO_DEGREES(body->GetAngle()));
-
-			//if(body->GetMass() > m_cActor)
-
+			actor_shape->setRotation(-1*CC_RADIANS_TO_DEGREES(actor_body->GetAngle()));
 		}
+
+		//-------------------更新质量
+		if(actor->getType() == Actor::AT_Control || actor->getType() == Actor::AT_Move) {
+			((MoveActor *)actor)->swallow();
+		}
+		
 	}
+
 
 }
 
@@ -97,25 +121,30 @@ Actor *ActorManager::createActor(Actor::ActorType actorType, CCLayer *layer, CCP
 	return actor;
 }
 
+bool ActorManager::clearActor(Actor *actor) {
+	if(!actor) return false;
+
+	if(actor->getType() == Actor::AT_Move) {
+		m_actors.remove(actor);
+		m_destroy.push_back(actor);
+	}else if(actor->getType() == Actor::AT_Control){
+		m_cActor = NULL;
+		m_destroy.push_back(actor);
+		m_over = true;
+	}
+
+	return true;
+}
 
 /**
 *创建围栏
 */
 void ActorManager::createWrapWall(CCLayer *layer, const CCPoint &pos, const CCSize &size){
-	int thick = 20;
-	
-	m_wall.push_back(
-		new WallActor(m_world, layer, CCPoint(pos.x + size.width/2, pos.y + size.height),CCSize(size.width,thick)));
-	m_wall.push_back(
-		new WallActor(m_world, layer, CCPoint(pos.x + size.width/2, pos.y),CCSize(size.width,thick)));
-	m_wall.push_back(
-		new WallActor(m_world, layer, CCPoint(pos.x, pos.y + size.height/2),CCSize(thick,size.height)));
-	m_wall.push_back(
-		new WallActor(m_world, layer, CCPoint(pos.x + size.width, pos.y + size.height/2),CCSize(thick,size.height)));
+	m_wall = new WallActor(m_world, layer, pos, size);
 }
 
 void ActorManager::launch(CCPoint pos) {
-	BaseActor *actor = m_cActor->launch(pos);
+	Actor *actor = m_cActor->launch(pos);
 	if(actor) {
 		m_actors.push_back(actor);
 	}
