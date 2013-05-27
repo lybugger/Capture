@@ -48,25 +48,9 @@ void ActorManager::BeginContact(b2Contact* contact) {
 		Actor *a1 = (Actor *)b1->GetUserData();
 		Actor *a2 = (Actor *)b2->GetUserData();
 
-		if(a1->getType() != Actor::AT_Wall && a2->getType() != Actor::AT_Wall) {
-
-			MoveActor *ma1 = static_cast<MoveActor *>(a1);
-			MoveActor *ma2 = static_cast<MoveActor *>(a2);
-
-			//预防多个同时碰撞
-			if(ma1->getDeltaMass() != 0 || ma2->getDeltaMass() !=0) return;
-
-			if(ma1->getMass() > ma2->getMass()) {
-				ma1->setDeltaMass(ma2->getMass());
-				ma2->setDeltaMass(-ma2->getMass());
-				this->clearActor(ma2);
-			}else {
-				ma2->setDeltaMass(ma1->getMass());
-				ma1->setDeltaMass(-ma1->getMass());
-				this->clearActor(ma1);
-			}
-			
-		}
+		if(a1->getType() == Actor::AT_Sun) a1->dealContact(a2);
+		else if(a2->getType() == Actor::AT_Sun) a2->dealContact(a1);
+		else if(a1->getType() == Actor::AT_Move || a2->getType() == Actor::AT_Move) a1->dealContact(a2);
 	}
  
 	B2_NOT_USED(contact); 
@@ -79,8 +63,6 @@ void ActorManager::updateWorld(float dt) {
 		itr = m_destroy.erase(itr);
 	}
 
-
-
 	//------------------更新物理世界
 	m_world->Step(dt, 8, 1);
 
@@ -88,21 +70,7 @@ void ActorManager::updateWorld(float dt) {
 	for(b2Body *actor_body = m_world->GetBodyList();actor_body;actor_body=actor_body->GetNext()) {
 		Actor *actor = (Actor *)actor_body->GetUserData();
 		if(actor==NULL) break;
-
-		//------------------更新 actor shape
-		if(actor_body->GetUserData() != NULL) {
-			CCSprite *actor_shape = actor->getShape();
-			//更新位置
-			actor_shape->setPosition(ccp(actor_body->GetPosition().x*PTM_RATIO,actor_body->GetPosition().y*PTM_RATIO));
-			//更新角度
-			actor_shape->setRotation(-1*CC_RADIANS_TO_DEGREES(actor_body->GetAngle()));
-		}
-
-		//-------------------更新质量
-		if(actor->getType() == Actor::AT_Control || actor->getType() == Actor::AT_Move) {
-			((MoveActor *)actor)->swallow();
-		}
-		
+		actor->update(dt);
 	}
 
 

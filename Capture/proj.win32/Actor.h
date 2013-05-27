@@ -15,12 +15,22 @@ public:
 	enum ActorType {
 		AT_Move,
 		AT_Control,
-		AT_Wall
+		AT_Wall,
+		AT_SingleWall,
+		AT_Sun
 	};
 
 public:
 	Actor();
 	virtual ~Actor();
+	virtual void update(float dt);		//更新
+	virtual void dealContact(Actor* actor){}			//处理碰撞
+	virtual void createCircle(b2World *world, CCLayer *layer, CCPoint pos, float radius, bool isStatic=false); //通用创建圆
+	virtual void createRectangle(b2World *world, CCLayer *layer, CCPoint pos, CCSize size, bool isStatic=false);//通用创建矩形
+
+
+
+
 	b2Body *getBody() {return m_body;}
 	void setBody(b2Body *body) {m_body = body;}
 	CCSprite *getShape() {return m_shape;}
@@ -43,6 +53,8 @@ protected:
 class MoveActor : public Actor{
 public:
 	MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius);
+	virtual void update(float dt);		//更新
+	virtual void dealContact(Actor* actor);			//处理碰撞
 	virtual float swallow();
 	void setDeltaMass(float mass) {m_deltaMass = mass;}
 	float getDeltaMass() {return m_deltaMass;}
@@ -99,13 +111,18 @@ public:
 //-----------------------------------------------------------SunActor
 class SunActor : public Actor {
 public:
+	virtual ~SunActor();
 	SunActor(b2World *world, CCLayer *layer, CCPoint pos, float radius, float gravRadius);
+	void virtual update(float dt);							//更新
+	virtual void dealContact(Actor* actor);			//处理碰撞
 
+	void createGravity(b2World *world, CCLayer *layer, CCPoint pos,  float gravRadius);
+	void setForceAndVelocity(Actor *actor);
 
 protected:
-	float m_gravity;
-	float m_gravRadius;
-}
+	std::list<Actor *> m_actors;
+	MoveActor *m_sun;
+};
 
 
 #endif

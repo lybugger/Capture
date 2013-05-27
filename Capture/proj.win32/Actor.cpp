@@ -23,14 +23,22 @@ Actor::~Actor() {
 	}
 }
 
+void Actor::update(float dt) {
+		//------------------更新 actor shape
+		if(m_shape != NULL) {
+			//更新位置
+			m_shape->setPosition(ccp(m_body->GetPosition().x*PTM_RATIO,m_body->GetPosition().y*PTM_RATIO));
+			//更新角度
+			m_shape->setRotation(-1*CC_RADIANS_TO_DEGREES(m_body->GetAngle()));
+		}
+}
 
-//-----------------------------------------------------------MoveActor
-//构造函数
-MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) {
+
+void Actor::createCircle(b2World *world, CCLayer *layer, CCPoint pos, float radius, bool isStatic) {
 	//-----------------设置物理模型
 	b2BodyDef bodyDef;
 	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
-	bodyDef.type =  b2_dynamicBody;
+	bodyDef.type = isStatic?b2_staticBody : b2_dynamicBody;
 	bodyDef.userData = (Actor *)this;		//以便在碰撞检测找到
 
 	//创建box
@@ -54,12 +62,73 @@ MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) 
 	shape->retain();
 	layer->addChild(shape);
 	m_shape = shape;
+}
 
+
+void Actor::createRectangle(b2World *world, CCLayer *layer, CCPoint pos, CCSize size, bool isStatic) {
+	//-----------------设置物理模型
+	b2BodyDef bodyDef;
+	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
+	bodyDef.type = isStatic?b2_staticBody : b2_dynamicBody;
+	bodyDef.userData = (Actor *)this;				//以便在碰撞检测找到
+
+	//创建box
+	b2PolygonShape boxShape;
+	boxShape.SetAsBox(size.width/PTM_RATIO/2, size.height/PTM_RATIO/2);
+	b2Body *box = world->CreateBody(&bodyDef);
+
+	//设置夹具
+	b2FixtureDef fixtureDef;
+	fixtureDef.density = 10;			//密度
+	fixtureDef.friction = 0.0f;			//滑动摩擦
+	fixtureDef.restitution = 1.0f;		//弹性体复原
+	fixtureDef.shape = &boxShape;
+	box->CreateFixture(&fixtureDef);
+	m_body = box;
+
+	//-----------------设置显示模型
+	//为box披上外衣
+	CCSprite *shape = CCSprite::create();
+	shape->setTextureRect(CCRect(0,0, size.width,size.height));
+	shape->retain();
+	layer->addChild(shape);
+	m_shape = shape;
+}
+
+
+//-----------------------------------------------------------MoveActor
+//构造函数
+MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) {
+	
+	createCircle(world, layer, pos, radius);
 	//-----------------设置类型
 	m_type = Actor::AT_Move;
 	
 }
 
+void MoveActor::update(float dt) {
+	//调用父类
+	Actor::update(dt);
+	//-------------------更新质量
+	this->swallow();
+}
+
+void MoveActor::dealContact(Actor* actor) {
+	MoveActor *moveActor = static_cast<MoveActor *>(actor);
+	ActorManager *actorManager = ActorManager::shareActorManager();
+	//预防多个同时碰撞
+	if(this->getDeltaMass() != 0 || moveActor->getDeltaMass() !=0) return;
+
+	if(this->getMass() > moveActor->getMass()) {
+		this->setDeltaMass(moveActor->getMass());
+		this->setDeltaMass(-moveActor->getMass());
+		actorManager->clearActor(moveActor);
+	}else {
+		moveActor->setDeltaMass(this->getMass());
+		moveActor->setDeltaMass(-this->getMass());
+		actorManager->clearActor(this);
+	}
+}
 
 float MoveActor::swallow() {
 	float mass = m_deltaMass;
@@ -151,38 +220,72 @@ WallActor::WallActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) 
 
 
 SingalWallActor::SingalWallActor(b2World *world, CCLayer *layer, CCPoint pos, CCSize size) {
+	createRectangle(world,layer,pos,size,true);
+	//-----------------设置类型
+	m_type = Actor::AT_SingleWall;
+}
+
+//--------------------------------------------------------------SunActor 
+
+SunActor::SunActor(b2World *world, CCLayer *layer, CCPoint pos, float radius, float gravRadius) {
+	//----------------------------------------------------------------------------太阳实体
+	m_sun = new MoveActor(world, layer, pos, radius);
+	m_sun->getBody()->SetType(b2_staticBody);
+
+	//--------------------------------------------------------------------重力区域
+	createGravity(world,layer,pos,gravRadius);
+	
+	//-----------------设置类型
+	m_type = Actor::AT_Sun;
+}
+
+SunActor::~SunActor() {
+	if(m_sun) {
+		delete m_sun;
+		m_sun = NULL;
+	}
+}
+
+void SunActor::update(float dt) {
+	Actor::update(dt);
+}
+
+void SunActor::dealContact(Actor* actor) {
+
+}
+
+void SunActor::createGravity(b2World *world, CCLayer *layer, CCPoint pos, float gravRadius) {
 	//-----------------设置物理模型
 	b2BodyDef bodyDef;
 	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
-	bodyDef.type =  b2_staticBody;
-	bodyDef.userData = (Actor *)this;				//以便在碰撞检测找到
+	bodyDef.type = b2_staticBody;
+	bodyDef.userData = (Actor *)this;		//以便在碰撞检测找到
 
 	//创建box
-	b2PolygonShape boxShape;
-	boxShape.SetAsBox(size.width/PTM_RATIO/2, size.height/PTM_RATIO/2);
-	b2Body *box = world->CreateBody(&bodyDef);
+	b2CircleShape circleShape;
+	circleShape.m_radius = gravRadius/PTM_RATIO;
+	b2Body *circle = world->CreateBody(&bodyDef);
 
 	//设置夹具
 	b2FixtureDef fixtureDef;
 	fixtureDef.density = 10;			//密度
 	fixtureDef.friction = 0.0f;			//滑动摩擦
 	fixtureDef.restitution = 1.0f;		//弹性体复原
-	fixtureDef.shape = &boxShape;
-	box->CreateFixture(&fixtureDef);
-	m_body = box;
+	fixtureDef.shape = &circleShape;
+	fixtureDef.isSensor = true;
+	circle->CreateFixture(&fixtureDef);
+	m_body = circle;
 
-	//-----------------设置显示模型
-	//为box披上外衣
+	//---------------设置显示模型
 	CCSprite *shape = CCSprite::create();
-	shape->setTextureRect(CCRect(0,0, size.width,size.height));
+	shape->setTextureRect(CCRect(0,0, gravRadius*2, gravRadius*2));
 	shape->retain();
 	layer->addChild(shape);
 	m_shape = shape;
+	
+}
+
+void SunActor::setForceAndVelocity(Actor *actor) {
 
 }
 
-//--------------------------------------------------------------SunActor 
-
-SunActor::SunActor(b2World *world, CCLayer *layer, CCPoint pos, float radius, float gravRadius) {
-
-}
