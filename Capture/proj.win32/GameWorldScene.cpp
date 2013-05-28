@@ -13,6 +13,8 @@ bool GameWorldLayer::init(int level) {
 		CCSize winSize = CCDirector::sharedDirector()->getWinSize();
 		//create background
 		CCSprite *pBG = CCSprite::create("bg1.jpg");
+		ccTexParams params =  {GL_LINEAR, GL_LINEAR, GL_REPEAT, GL_REPEAT};
+		pBG->getTexture()->setTexParameters(&params);
 		CC_BREAK_IF(!pBG);
 		pBG->setAnchorPoint(ccp(0,0));
 		pBG->setPosition(ccp(0,0));
@@ -22,8 +24,10 @@ bool GameWorldLayer::init(int level) {
 
 		CCSize size = pBG->getTextureRect().size;
 		m_ActorManager->createWrapWall(this, ccp(0,0), size);
-		m_ActorManager->createDebug();
-		m_ActorManager->createActor(Actor::AT_Control,(CCLayer *)this,ccp(winSize.width/2,winSize.height/2),50);
+		//m_ActorManager->createDebug();
+		m_ActorManager->createActor(Actor::AT_Control,(CCLayer *)this,ccp(150,150),50);
+		//m_ActorManager->createActor(Actor::AT_Sun,(CCLayer *)this,ccp(2000,1500),200);
+
 		setTouchEnabled( true );
 		this->schedule(schedule_selector(GameWorldLayer::update));
 
@@ -55,9 +59,17 @@ void GameWorldLayer::update(float dt) {
 	newPos.x += winSize.width/2 - (actorPos.x - screenPos.x);
 	newPos.y += winSize.height/2 - (actorPos.y - screenPos.y);
 
+	
 	//屏幕不超过背景
 	newPos = ccpClamp(newPos,ccp(-m_worldRect.getMinX(),-m_worldRect.getMinY()),
 		ccp(winSize.width-m_worldRect.getMaxX(),winSize.height-m_worldRect.getMaxY()));
+		
+	/*
+	//更新视距
+	float radius = m_ActorManager->getControlActor()->getRadius();
+	float scale = winSize.height/radius/50;
+	this->getParent()->setScale(scale);
+	*/
 	this->setPosition(newPos);
 }
 

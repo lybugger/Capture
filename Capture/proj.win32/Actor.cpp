@@ -4,8 +4,7 @@
 Actor::Actor()
 	:m_body(NULL),
 	m_shape(NULL),
-	m_type(-1),
-	m_deltaMass(0)
+	m_type(-1)
  {
 	//自动产生id
 	static int id=0;
@@ -30,6 +29,11 @@ void Actor::update(float dt) {
 			m_shape->setPosition(ccp(m_body->GetPosition().x*PTM_RATIO,m_body->GetPosition().y*PTM_RATIO));
 			//更新角度
 			m_shape->setRotation(-1*CC_RADIANS_TO_DEGREES(m_body->GetAngle()));
+			//更新大小
+			m_shape->setScaleX(m_body->GetFixtureList()->GetShape()->m_radius*PTM_RATIO*2/
+				m_shape->getTexture()->getContentSize().width);
+			m_shape->setScaleY(m_body->GetFixtureList()->GetShape()->m_radius*PTM_RATIO*2/
+				m_shape->getTexture()->getContentSize().width);
 		}
 }
 
@@ -57,11 +61,7 @@ void Actor::createCircle(b2World *world, CCLayer *layer, CCPoint pos, float radi
 	m_body = circle;
 
 	//---------------设置显示模型
-	CCSprite *shape = CCSprite::create();
-	shape->setTextureRect(CCRect(0,0, radius*2, radius*2));
-	shape->retain();
-	layer->addChild(shape);
-	m_shape = shape;
+	createShape(layer,CCSize(radius*2,radius*2));
 }
 
 
@@ -87,18 +87,15 @@ void Actor::createRectangle(b2World *world, CCLayer *layer, CCPoint pos, CCSize 
 	m_body = box;
 
 	//-----------------设置显示模型
-	//为box披上外衣
-	CCSprite *shape = CCSprite::create();
-	shape->setTextureRect(CCRect(0,0, size.width,size.height));
-	shape->retain();
-	layer->addChild(shape);
-	m_shape = shape;
+	createShape(layer,size);
 }
 
 
 //-----------------------------------------------------------MoveActor
 //构造函数
-MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius) {
+MoveActor::MoveActor(b2World *world, CCLayer *layer, CCPoint pos, float radius)
+	:	m_deltaMass(0)
+{
 	
 	createCircle(world, layer, pos, radius);
 	//-----------------设置类型
@@ -147,6 +144,26 @@ float MoveActor::swallow() {
 	return mass;
 }
 
+void MoveActor::createShape(CCLayer *layer, CCSize size) {
+	//为box披上外衣
+	CCSprite *shape = CCSprite::create("ball.png");
+	//shape->setTextureRect(CCRect(0,0, size.width,size.height));
+	shape->setScaleX(size.width/shape->getTexture()->getContentSize().width);
+	shape->setScaleY(size.height/shape->getTexture()->getContentSize().width);
+	//shape->retain();
+
+	  CCParticleFlower* sun = CCParticleFlower::create();
+    sun->setTexture(CCTextureCache::sharedTextureCache()->addImage("fire.png"));
+	sun->setScale(4);
+	sun->setPosition(shape->getContentSize().width/2,shape->getContentSize().height/2);
+    sun->setTotalParticles(130);
+    sun->setLife(0.6f);
+	shape->addChild(sun);
+
+
+	layer->addChild(shape);
+	m_shape = shape;
+}		
 
 //--------------------------------------------------------------ControlActor
 ControlActor::ControlActor(b2World *world, CCLayer *layer, CCPoint pos, float radius)
@@ -159,7 +176,7 @@ ControlActor::ControlActor(b2World *world, CCLayer *layer, CCPoint pos, float ra
 //角色抛射物质
 Actor *ControlActor::launch(CCPoint touchPos) {
 	//判断角色大小为单位大小
-	if(this->getRadius() <= this->getPushRadius()) {
+	if(this->getRadius() <= this->getPushRadius()*3) {
 		return NULL;
 	}
 
@@ -174,7 +191,7 @@ Actor *ControlActor::launch(CCPoint touchPos) {
 
 	MoveActor *launchActor = (MoveActor *)ActorManager::shareActorManager()->createActor(Actor::AT_Move, layer, launchPos, this->getPushRadius());
 	//计算喷射物质速度
-	b2Vec2 launchVelocity = b2Vec2(dir.x*UNIT_SPEED,dir.y*UNIT_SPEED);
+	b2Vec2 launchVelocity = b2Vec2(dir.x*UNIT_SPEED,dir.y*UNIT_SPEED)+m_body->GetLinearVelocity();
 	float launchMass = launchActor->getMass();    //喷射物质质量
 	float newMass = this->getMass()-launchMass;			   //喷射后角色质量
 	//计算喷射物质反冲量 = - launchVelocity*launchMass
@@ -229,63 +246,102 @@ SingalWallActor::SingalWallActor(b2World *world, CCLayer *layer, CCPoint pos, CC
 
 SunActor::SunActor(b2World *world, CCLayer *layer, CCPoint pos, float radius, float gravRadius) {
 	//----------------------------------------------------------------------------太阳实体
-	m_sun = new MoveActor(world, layer, pos, radius);
-	m_sun->getBody()->SetType(b2_staticBody);
-
+	createCircle(world,layer,pos,radius,true);
+	m_sunMass = 20000;
+	m_G  = 0.1f;
+	m_gravRadius = gravRadius;
 	//--------------------------------------------------------------------重力区域
-	createGravity(world,layer,pos,gravRadius);
+	setGravityAndVelocity();
 	
 	//-----------------设置类型
 	m_type = Actor::AT_Sun;
 }
 
-SunActor::~SunActor() {
-	if(m_sun) {
-		delete m_sun;
-		m_sun = NULL;
-	}
-}
-
 void SunActor::update(float dt) {
+	
 	Actor::update(dt);
+	ActorManager *actorManager = ActorManager::shareActorManager();
+	list<Actor *> *actors = actorManager->getActors();
+	b2Vec2 gravity;
+
+	for(list<Actor *>::iterator itr = actors->begin();itr!=actors->end();itr++) {
+		gravity  = getGravityFromActor(*itr);
+		(*itr)->setGravity(gravity);
+		(*itr)->getBody()->ApplyForce(gravity,m_body->GetPosition());
+	}
+
+
 }
 
 void SunActor::dealContact(Actor* actor) {
+	MoveActor *moveActor = static_cast<MoveActor *>(actor);
+	ActorManager *actorManager = ActorManager::shareActorManager();
+	//预防多个同时碰撞
+	if(moveActor->getDeltaMass() !=0) return;
+
+	moveActor->setDeltaMass(-moveActor->getMass());
+	actorManager->clearActor(moveActor);
 
 }
 
-void SunActor::createGravity(b2World *world, CCLayer *layer, CCPoint pos, float gravRadius) {
-	//-----------------设置物理模型
-	b2BodyDef bodyDef;
-	bodyDef.position.Set(pos.x/PTM_RATIO,pos.y/PTM_RATIO);
-	bodyDef.type = b2_staticBody;
-	bodyDef.userData = (Actor *)this;		//以便在碰撞检测找到
+void SunActor::setGravityAndVelocity() {
+	ActorManager *actorManager = ActorManager::shareActorManager();
+	list<Actor *> *actors = actorManager->getActors();
+	b2Vec2 gravity, velocity;
 
-	//创建box
-	b2CircleShape circleShape;
-	circleShape.m_radius = gravRadius/PTM_RATIO;
-	b2Body *circle = world->CreateBody(&bodyDef);
+	for(list<Actor *>::iterator itr = actors->begin();itr!=actors->end();itr++) {
+		gravity  = getGravityFromActor(*itr);
+		(*itr)->setGravity(gravity);
+		velocity = getVelocityFromActor(*itr);
+		(*itr)->getBody()->ApplyForce(gravity,m_body->GetPosition());
+		(*itr)->getBody()->SetLinearVelocity(velocity);
+	}
 
-	//设置夹具
-	b2FixtureDef fixtureDef;
-	fixtureDef.density = 10;			//密度
-	fixtureDef.friction = 0.0f;			//滑动摩擦
-	fixtureDef.restitution = 1.0f;		//弹性体复原
-	fixtureDef.shape = &circleShape;
-	fixtureDef.isSensor = true;
-	circle->CreateFixture(&fixtureDef);
-	m_body = circle;
-
-	//---------------设置显示模型
-	CCSprite *shape = CCSprite::create();
-	shape->setTextureRect(CCRect(0,0, gravRadius*2, gravRadius*2));
-	shape->retain();
-	layer->addChild(shape);
-	m_shape = shape;
-	
 }
 
-void SunActor::setForceAndVelocity(Actor *actor) {
 
+b2Vec2 SunActor::getGravityFromActor(Actor *actor) {
+	/*
+		//万有引力公式F=GMm/(R^2)
+	//因为sun为静态没有质量默认为100000，G设为0.0001
+	b2Body *body = actor->getBody();
+	b2Vec2 v = body->GetPosition();
+	b2Vec2 force;
+	float F;
+	v -= this->getBody()->GetPosition();
+	F = m_G*m_sunMass*body->GetMass()/(v.LengthSquared());
+	v.Normalize();
+	force = b2Vec2(-v.x*F,-v.y*F);
+	*/
+	b2Body *body = actor->getBody();
+	b2Vec2 planetDistance = this->getBody()->GetPosition();
+	planetDistance -= body->GetPosition();
+	float finalDistance = planetDistance.Length();
+	b2Vec2 force=b2Vec2(0,0);
+
+	if(finalDistance <= m_gravRadius) {
+		float F = m_G*m_sunMass*body->GetMass()/(planetDistance.LengthSquared());
+		planetDistance.Normalize();
+		force = b2Vec2(planetDistance.x*F,planetDistance.y*F);
+	}
+
+	return force;
+}
+
+
+b2Vec2 SunActor::getVelocityFromActor(Actor *actor) {
+	//离心运动F=mω^2r=mv^2/r    =>   v = sqrt(F*r/m)
+
+	b2Body *body = actor->getBody();
+	b2Vec2 v = body->GetPosition();
+	b2Vec2 velocity;
+	v -= this->getBody()->GetPosition();
+	float speed = sqrt(actor->getGravity().Length()*v.Length()/actor->getBody()->GetMass());
+	//方向为顺时针方向
+	v.Normalize();
+
+
+	velocity = b2Vec2(-v.y*speed,v.x*speed);
+	return velocity;
 }
 

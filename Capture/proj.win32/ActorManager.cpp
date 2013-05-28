@@ -25,11 +25,6 @@ ActorManager::ActorManager()
 //析构函数
 ActorManager::~ActorManager() {
 	release();
-	//clear control actor
-	if(m_cActor) {
-		delete m_cActor;
-		m_cActor = NULL;
-	}
 
 	//clear move actor
 	for(list<Actor *>::iterator itr = m_actors.begin();itr!=m_actors.end();) {
@@ -57,12 +52,6 @@ void ActorManager::BeginContact(b2Contact* contact) {
 }
 
 void ActorManager::updateWorld(float dt) {
-	//------------------删除吞噬的对象
-	for(list<Actor *>::iterator itr = m_destroy.begin();itr!=m_destroy.end();) {
-		delete *itr;
-		itr = m_destroy.erase(itr);
-	}
-
 	//------------------更新物理世界
 	m_world->Step(dt, 8, 1);
 
@@ -73,16 +62,24 @@ void ActorManager::updateWorld(float dt) {
 		actor->update(dt);
 	}
 
-
+	//------------------删除吞噬的对象
+	for(list<Actor *>::iterator itr = m_destroy.begin();itr!=m_destroy.end();) {
+		delete *itr;
+		itr = m_destroy.erase(itr);
+	}
 }
 
 Actor *ActorManager::createActor(Actor::ActorType actorType, CCLayer *layer, CCPoint pos, float radius) {
 	Actor *actor;
 	if(actorType == Actor::AT_Control) {
 		actor = new ControlActor(m_world, layer, pos, radius);
-		m_cActor = (ControlActor *)actor;
+		m_controlActor = static_cast<ControlActor *>(actor);
+		m_actors.push_back(actor);
 	}else if(actorType == Actor::AT_Move) {
 		actor = new MoveActor(m_world, layer, pos, radius);
+		m_actors.push_back(actor);
+	}else if(actorType == Actor::AT_Sun) {
+		actor = new SunActor(m_world, layer, pos, radius,10000);
 		m_actors.push_back(actor);
 	}
 
@@ -96,7 +93,8 @@ bool ActorManager::clearActor(Actor *actor) {
 		m_actors.remove(actor);
 		m_destroy.push_back(actor);
 	}else if(actor->getType() == Actor::AT_Control){
-		m_cActor = NULL;
+		m_controlActor = NULL;
+		m_actors.remove(actor);
 		m_destroy.push_back(actor);
 		m_over = true;
 	}
@@ -112,7 +110,7 @@ void ActorManager::createWrapWall(CCLayer *layer, const CCPoint &pos, const CCSi
 }
 
 void ActorManager::launch(CCPoint pos) {
-	Actor *actor = m_cActor->launch(pos);
+	Actor *actor = m_controlActor->launch(pos);
 	if(actor) {
 		m_actors.push_back(actor);
 	}
